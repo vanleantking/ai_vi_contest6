@@ -9,7 +9,7 @@ oke, ok, okie, oki: tốt
 jong: giống
 đc, dc: được
 bt: biết / bình thường
-đt: điện thoại
+dt, đt: điện thoại
 SĐT: số điện thoại
 r: rồi
 best, good: tốt
@@ -31,7 +31,7 @@ thanks, tks: cảm ơn
 real: thật
 fake: giả
 review: đánh giá
-mk, m: mình
+mik, mk, m: mình
 comment: ý kiến
 value: giá trị
 money: tiền
@@ -70,3 +70,4 @@ test: kiểm tra
 nv giao hàng: nhân viên giao hàng
 ksao: không sao
 κ: không
+dep: đẹp

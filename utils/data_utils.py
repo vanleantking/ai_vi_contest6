@@ -48,14 +48,19 @@ def load_file(dict_abbs):
 def process_data(original, dict_abbs):
 	process = UniStd(original)
 	# process = re.findall(r'[a-zA-ZàáãạảăắằẳẵặâấầẩẫậèéẹẻẽêềếểễệđìíĩỉịòóõọỏôốồổỗộơớờởỡợùúũụủưứừửữựỳỵỷỹýÀÁÃẠẢĂẮẰẲẴẶÂẤẦẨẪẬÈÉẸẺẼÊỀẾỂỄỆĐÌÍĨỈỊÒÓÕỌỎÔỐỒỔỖỘƠỚỜỞỠỢÙÚŨỤỦƯỨỪỬỮỰỲỴỶỸÝ\s\d\.,!?\-/]+', original)
-	process = re.findall('[a-zA-ZàáãạảăắằẳẵặâấầẩẫậèéẹẻẽêềếểễệđìíĩỉịòóõọỏôốồổỗộơớờởỡợùúũụủưứừửữựỳỵỷỹýÀÁÃẠẢĂẮẰẲẴẶÂẤẦẨẪẬÈÉẸẺẼÊỀẾỂỄỆĐÌÍĨỈỊÒÓÕỌỎÔỐỒỔỖỘƠỚỜỞỠỢÙÚŨỤỦƯỨỪỬỮỰỲỴỶỸÝ\\s\\d]+', process)
+	# process = re.findall(r'[a-zA-ZàáãạảăắằẳẵặâấầẩẫậèéẹẻẽêềếểễệđìíĩỉịòóõọỏôốồổỗộơớờởỡợùúũụủưứừửữựỳỵỷỹýÀÁÃẠẢĂẮẰẲẴẶÂẤẦẨẪẬÈÉẸẺẼÊỀẾỂỄỆĐÌÍĨỈỊÒÓÕỌỎÔỐỒỔỖỘƠỚỜỞỠỢÙÚŨỤỦƯỨỪỬỮỰỲỴỶỸÝ\s\d]+', process)
+	process = re.findall(r'[a-zA-ZàáãạảăắằẳẵặâấầẩẫậèéẹẻẽêềếểễệđìíĩỉịòóõọỏôốồổỗộơớờởỡợùúũụủưứừửữựỳỵỷỹýÀÁÃẠẢĂẮẰẲẴẶÂẤẦẨẪẬÈÉẸẺẼÊỀẾỂỄỆĐÌÍĨỈỊÒÓÕỌỎÔỐỒỔỖỘƠỚỜỞỠỢÙÚŨỤỦƯỨỪỬỮỰỲỴỶỸÝ\s\d]+', process)
+
 	replace_abbs = list()
 	for text in process:
 		text = text.lower()
 		for key, value in dict_abbs.items():
 			# find word with spaces in text
-			if (' ' + key + ' ') in (' ' + text + ' '):
-				text = text.replace(key, value)
+			# if (' ' + key + ' ') in (' ' + text + ' '):
+			# 	text = text.replace(' ' + key + ' ', ' ' + value + ' ')
+			match_string = r'\b' + key + r'\b'
+			regex = re.compile(match_string, re.S)
+			text = regex.sub(lambda m: m.group().replace(key,value,1), text)
 		text = text.replace('\xa0', '') # error in encode
 		text = re.sub(r'(.)\1+', r'',text) # remove duplicate charater in word: ơiiiiiiiiiii
 		replace_abbs.append(text)
