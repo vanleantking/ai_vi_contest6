@@ -15,12 +15,14 @@ def process_data(original, dict_abbs):
 			# find word with spaces in text
 			match_string = r'\b' + key + r'\b'
 			regex = re.compile(match_string, re.S)
-			text = regex.sub(lambda m: m.group().replace(key,value,1), text)
+			text = regex.sub(lambda m: m.group().replace(key,' ' + value + ' ',1), text)
+		text = ' '.join(text.split())
 		text = text.replace('\xa0', '') # error in encode
 		text = re.sub(r'(.)\1+', r'',text) # remove duplicate charater in word: ơiiiiiiiiiii
 		replace_abbs.append(text)
 
 	replace_abbs = list(map(lambda x: x.strip(), replace_abbs))
+	print("after, ", replace_abbs)
 	replace_abbs = list(filter(lambda x: x != '', replace_abbs))
 
 	return replace_abbs
@@ -84,7 +86,7 @@ def abb_file():
 	return abb_words
 
 dict_abbs = abb_file()
-original = "Hjhj shop giao hàng nhanh quá. Đẹp lắm ạ bé nhà m rất thích"
+original = "Hàng ship nhanh  chất lượng tốt  tư vấn nhiệt tình ship rất đung size sẽ ủng hộ shop nhìu ❤️"
 
 # print(m)
 

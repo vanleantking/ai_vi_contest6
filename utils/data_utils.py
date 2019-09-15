@@ -61,8 +61,9 @@ def process_data(original, dict_abbs):
 			match_string = r'\b' + key + r'\b'
 			regex = re.compile(match_string, re.S)
 			text = regex.sub(lambda m: m.group().replace(key,value,1), text)
+		text = ' '.join(text.split())
 		text = text.replace('\xa0', '') # error in encode
-		text = re.sub(r'(.)\1+', r'',text) # remove duplicate charater in word: ơiiiiiiiiiii
+		text = re.sub(r'(\w)\1+', r'',text) # remove duplicate charater in word: ơiiiiiiiiiii
 		replace_abbs.append(text)
 
 	replace_abbs = list(map(lambda x: x.strip(), replace_abbs))
