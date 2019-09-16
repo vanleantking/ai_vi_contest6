@@ -47,29 +47,27 @@ def load_file(dict_abbs):
 
 def process_data(original, dict_abbs):
 	process = UniStd(original)
-	# process = re.findall(r'[a-zA-ZàáãạảăắằẳẵặâấầẩẫậèéẹẻẽêềếểễệđìíĩỉịòóõọỏôốồổỗộơớờởỡợùúũụủưứừửữựỳỵỷỹýÀÁÃẠẢĂẮẰẲẴẶÂẤẦẨẪẬÈÉẸẺẼÊỀẾỂỄỆĐÌÍĨỈỊÒÓÕỌỎÔỐỒỔỖỘƠỚỜỞỠỢÙÚŨỤỦƯỨỪỬỮỰỲỴỶỸÝ\s\d\.,!?\-/]+', original)
+	# process = re.findall('[a-zA-ZàáãạảăắằẳẵặâấầẩẫậèéẹẻẽêềếểễệđìíĩỉịòóõọỏôốồổỗộơớờởỡợùúũụủưứừửữựỳỵỷỹýÀÁÃẠẢĂẮẰẲẴẶÂẤẦẨẪẬÈÉẸẺẼÊỀẾỂỄỆĐÌÍĨỈỊÒÓÕỌỎÔỐỒỔỖỘƠỚỜỞỠỢÙÚŨỤỦƯỨỪỬỮỰỲỴỶỸÝ\s\d\\.,!?\\-/]+', process)
+	process = re.sub('[^a-zA-ZàáãạảăắằẳẵặâấầẩẫậèéẹẻẽêềếểễệđìíĩỉịòóõọỏôốồổỗộơớờởỡợùúũụủưứừửữựỳỵỷỹýÀÁÃẠẢĂẮẰẲẴẶÂẤẦẨẪẬÈÉẸẺẼÊỀẾỂỄỆĐÌÍĨỈỊÒÓÕỌỎÔỐỒỔỖỘƠỚỜỞỠỢÙÚŨỤỦƯỨỪỬỮỰỲỴỶỸÝ0-9 ]+', '', process)
 	# process = re.findall(r'[a-zA-ZàáãạảăắằẳẵặâấầẩẫậèéẹẻẽêềếểễệđìíĩỉịòóõọỏôốồổỗộơớờởỡợùúũụủưứừửữựỳỵỷỹýÀÁÃẠẢĂẮẰẲẴẶÂẤẦẨẪẬÈÉẸẺẼÊỀẾỂỄỆĐÌÍĨỈỊÒÓÕỌỎÔỐỒỔỖỘƠỚỜỞỠỢÙÚŨỤỦƯỨỪỬỮỰỲỴỶỸÝ\s\d]+', process)
-	process = re.findall(r'[a-zA-ZàáãạảăắằẳẵặâấầẩẫậèéẹẻẽêềếểễệđìíĩỉịòóõọỏôốồổỗộơớờởỡợùúũụủưứừửữựỳỵỷỹýÀÁÃẠẢĂẮẰẲẴẶÂẤẦẨẪẬÈÉẸẺẼÊỀẾỂỄỆĐÌÍĨỈỊÒÓÕỌỎÔỐỒỔỖỘƠỚỜỞỠỢÙÚŨỤỦƯỨỪỬỮỰỲỴỶỸÝ\s\d]+', process)
+	# process = re.findall(r'[a-zA-ZàáãạảăắằẳẵặâấầẩẫậèéẹẻẽêềếểễệđìíĩỉịòóõọỏôốồổỗộơớờởỡợùúũụủưứừửữựỳỵỷỹýÀÁÃẠẢĂẮẰẲẴẶÂẤẦẨẪẬÈÉẸẺẼÊỀẾỂỄỆĐÌÍĨỈỊÒÓÕỌỎÔỐỒỔỖỘƠỚỜỞỠỢÙÚŨỤỦƯỨỪỬỮỰỲỴỶỸÝ\s\d]+', process)
 
-	replace_abbs = list()
-	for text in process:
-		text = text.lower()
-		for key, value in dict_abbs.items():
-			# find word with spaces in text
-			# if (' ' + key + ' ') in (' ' + text + ' '):
-			# 	text = text.replace(' ' + key + ' ', ' ' + value + ' ')
-			match_string = r'\b' + key + r'\b'
-			regex = re.compile(match_string, re.S)
-			text = regex.sub(lambda m: m.group().replace(key,value,1), text)
-		text = ' '.join(text.split())
-		text = text.replace('\xa0', '') # error in encode
-		text = re.sub(r'(\w)\1+', r'',text) # remove duplicate charater in word: ơiiiiiiiiiii
-		replace_abbs.append(text)
+	# replace_abbs = list()
+	text = process.lower()
+	# for text in process:
+	for key, value in dict_abbs.items():
+		# find word with spaces in text
+		# if (' ' + key + ' ') in (' ' + text + ' '):
+		# 	text = text.replace(' ' + key + ' ', ' ' + value + ' ')
+		match_string = r'\b' + key + r'\b'
+		regex = re.compile(match_string, re.S)
+		text = regex.sub(lambda m: m.group().replace(key,value,1), text)
+	text = text.replace('\xa0', '') # error in encode
+	text = re.sub(r'([a-z])\1+', r'',text) # remove duplicate charater in word: ơiiiiiiiiiii
+	text = ' '.join(text.split())
+	text = text.strip()
 
-	replace_abbs = list(map(lambda x: x.strip(), replace_abbs))
-	replace_abbs = list(filter(lambda x: x != '', replace_abbs))
-
-	return replace_abbs
+	return text
 
 def UniStd_L(str):
 	return str.\
