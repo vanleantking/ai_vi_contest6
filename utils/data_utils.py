@@ -2,6 +2,7 @@
 import pandas as pd
 
 import re
+from underthesea import word_tokenize
 DATA_FILE = '../data/train.crash'
 ABB_FILE = '../data/abb.txt'
 
@@ -50,11 +51,8 @@ def process_data(original, dict_abbs):
 	# process = re.findall('[a-zA-ZàáãạảăắằẳẵặâấầẩẫậèéẹẻẽêềếểễệđìíĩỉịòóõọỏôốồổỗộơớờởỡợùúũụủưứừửữựỳỵỷỹýÀÁÃẠẢĂẮẰẲẴẶÂẤẦẨẪẬÈÉẸẺẼÊỀẾỂỄỆĐÌÍĨỈỊÒÓÕỌỎÔỐỒỔỖỘƠỚỜỞỠỢÙÚŨỤỦƯỨỪỬỮỰỲỴỶỸÝ\s\d\\.,!?\\-/]+', process)
 	process = re.sub('[^a-zA-ZàáãạảăắằẳẵặâấầẩẫậèéẹẻẽêềếểễệđìíĩỉịòóõọỏôốồổỗộơớờởỡợùúũụủưứừửữựỳỵỷỹýÀÁÃẠẢĂẮẰẲẴẶÂẤẦẨẪẬÈÉẸẺẼÊỀẾỂỄỆĐÌÍĨỈỊÒÓÕỌỎÔỐỒỔỖỘƠỚỜỞỠỢÙÚŨỤỦƯỨỪỬỮỰỲỴỶỸÝ0-9 ]+', '', process)
 	# process = re.findall(r'[a-zA-ZàáãạảăắằẳẵặâấầẩẫậèéẹẻẽêềếểễệđìíĩỉịòóõọỏôốồổỗộơớờởỡợùúũụủưứừửữựỳỵỷỹýÀÁÃẠẢĂẮẰẲẴẶÂẤẦẨẪẬÈÉẸẺẼÊỀẾỂỄỆĐÌÍĨỈỊÒÓÕỌỎÔỐỒỔỖỘƠỚỜỞỠỢÙÚŨỤỦƯỨỪỬỮỰỲỴỶỸÝ\s\d]+', process)
-	# process = re.findall(r'[a-zA-ZàáãạảăắằẳẵặâấầẩẫậèéẹẻẽêềếểễệđìíĩỉịòóõọỏôốồổỗộơớờởỡợùúũụủưứừửữựỳỵỷỹýÀÁÃẠẢĂẮẰẲẴẶÂẤẦẨẪẬÈÉẸẺẼÊỀẾỂỄỆĐÌÍĨỈỊÒÓÕỌỎÔỐỒỔỖỘƠỚỜỞỠỢÙÚŨỤỦƯỨỪỬỮỰỲỴỶỸÝ\s\d]+', process)
 
-	# replace_abbs = list()
 	text = process.lower()
-	# for text in process:
 	for key, value in dict_abbs.items():
 		# find word with spaces in text
 		# if (' ' + key + ' ') in (' ' + text + ' '):
@@ -66,6 +64,7 @@ def process_data(original, dict_abbs):
 	text = re.sub(r'([a-z])\1+', r'',text) # remove duplicate charater in word: ơiiiiiiiiiii
 	text = ' '.join(text.split())
 	text = text.strip()
+	text = word_tokenize(text, format="text")
 
 	return text
 
