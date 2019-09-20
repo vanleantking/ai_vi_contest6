@@ -1,120 +1,344 @@
-# import pickle
-import pandas as pd
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Sat Mar 10 17:31:21 2018
 
+@author: dtvo
+"""
 import re
-from underthesea import word_tokenize
-DATA_FILE = '../data/train.crash'
-ABB_FILE = '../data/abb.txt'
+import torch
+import itertools
+import numpy as np
+from collections import Counter
+# ----------------------
+#    Word symbols
+# ----------------------
+PADw = u"<PADw>"
+UNKw = u"<UNKw>"
+SOw = u"<sw>"
+EOw = u"</sw>"
 
 
-def abb_file():
-	abb_words = {}
-	with open(ABB_FILE, 'r', encoding="utf-8") as data_file:
-		file_split = data_file.read().split("\n")
-		for line in file_split:
-			data_line = line.split(":")
-			values = data_line[1].strip()
-			keys = data_line[0].split(",")
-			for key in keys:
-				abb_words[key.strip()] = values
-	return abb_words
+class Vocab(object):
+    def __init__(self, wl_th=None, cutoff=1):
+        self.w2i = {}
+        self.l2i = {}
+        self.wl = wl_th
+        self.cutoff = cutoff
+                        
+    def build(self, files, firstline=False, limit=-1):
+        """
+        Read a list of file names, return vocabulary
+        :param files: list of file names
+        :param firstline: ignore first line flag
+        :param limit: read number of lines
+        """
+        lcnt = Counter()
+        wcnt = Counter()
+        print("Extracting vocabulary:")
+        wl = 0
+        count = 0
+        for fname in files:
+            raw = Txtfile(fname, firstline=firstline, limit=limit)
+            for sent, label in raw:
+                sent = sent.split()
+                wcnt.update(sent)
+                wl = max(wl, len(sent))
+                lcnt.update([label])
+                count += 1
+        print("\t%d total samples, %d total tokens, %d total labels" % (count, sum(wcnt.values()), sum(lcnt.values())))
+        wlst = [x for x, y in wcnt.items() if y >= self.cutoff]
+        wlst = [PADw, UNKw, SOw, EOw] + wlst
+        wvocab = dict([(y, x) for x, y in enumerate(wlst)])
+        lvocab = dict([(y, x) for x, y in enumerate(lcnt.keys())])
+        print("\t%d unique tokens, %d unique labels" % (len(wcnt), len(lcnt)), lcnt)
+        print("\t%d unique tokens appearing at least %d times" % (len(wvocab)-4, self.cutoff))
+        self.w2i = wvocab
+        self.l2i = lvocab 
+        if self.wl is None:
+            self.wl = wl
+        else:
+            self.wl = min(wl, self.wl)
 
-def load_file(dict_abbs):
+    def wd2idx(self, vocab_words=None, allow_unk=True, start_end=False):
+        """
+        Return a function to convert tag2idx or word/word2idx
+        :param vocab_words:
+        :param allow_unk:
+        :param start_end:
+        """
+        def f(sent):
+            if vocab_words is not None:
+                word_ids = []
+                sent = sent.split()
+                for word in sent:
+                    # ignore words out of vocabulary
+                    if word in vocab_words:
+                        word_ids += [vocab_words[word]]
+                    else:
+                        if allow_unk:
+                            word_ids += [vocab_words[UNKw]]
+                        else:
+                            raise Exception("Unknown key is not allowed. Check that your vocab (tags?) is correct")
+                if start_end:
+                    # SOc,EOc words for  EOW
+                    word_ids = [vocab_words[SOw]] + word_ids + [vocab_words[EOw]]
+            return word_ids
+        return f
+    
+    @staticmethod
+    def tag2idx(vocab_tags=None):
+        def f(tags): 
+            if tags in vocab_tags:
+                tag_ids = vocab_tags[tags]
+            else:
+                raise Exception("Unknown key is not allowed. Check that your vocab (tags?) is correct")
+            return tag_ids
+        return f
+        
+    @staticmethod
+    def minibatches(data, batch_size):
+        """
+        :param data:
+        :param batch_size:
+        :return:
+        """
+        """
+        Args:
+            data: generator of (sentence, tags) tuples
+            minibatch_size: (int)
+    
+        Yields:
+            list of tuples
+    
+        """
+        x_batch, y_batch = [], []
+        for (x, y) in data:
+            if len(x_batch) == batch_size:
+                yield x_batch, y_batch
+                x_batch, y_batch = [], []
+            x_batch += [x]
+            y_batch += [y]
+    
+        if len(x_batch) != 0:
+            yield x_batch, y_batch
 
-	split_re = re.compile("train_\\d{2,}")
-	all_reviews = list()
-	with open(DATA_FILE, 'r', encoding="utf-8") as data_file:
 
-		file_split = split_re.split(data_file.read())
-		file_split = list(filter(lambda x: x != '', file_split))
-		
-		for label_data in file_split:
-			d = {}
-			data = label_data.split("\n")
-			data = list(filter(lambda x: x != '', data))
-			# print(label_data, data)
-			label = data[-1]
-			text = ' '.join(data[:-1])
-			if text != "" :
-				review = process_data(text, dict_abbs)
-				d['text'] = review
-				d['label'] = label
-				all_reviews.append(d)
-	reviews_pd = pd.DataFrame.from_dict(all_reviews, orient='columns')
-	# reviews_pd = reviews_pd.sample(frac=1).reset_index(drop=True)
-	reviews_pd.to_csv('../data/process.csv', sep=',', encoding='utf-8',
-		header=True, columns=['text', 'label'], index=False)
-	return reviews_pd
+class Txtfile(object):
+    """
+    Read cvs file
+    """
+    def __init__(self, fname, word2idx=None, tag2idx=None, firstline=True, limit=-1):
+        self.fname = fname
+        self.firstline = firstline
+        if limit < 0:
+            self.limit = None
+        else:
+            self.limit = limit
+        self.word2idx = word2idx
+        self.tag2idx = tag2idx
+        self.length = None
+        
+    def __iter__(self):
+        with open(self.fname, newline='', encoding='utf-8') as f:
+            f.seek(0)
+            if self.firstline:
+                # Skip the header
+                next(f)
+            for line in itertools.islice(f, self.limit):
+                line = line.strip().split(",")
+                sent = line[0]
+                tag = line[1]
+                # sent = " ".join(line[1:])
+                # tag = line[0]
+                # sent = Txtfile.process_sent(sent)
+                if len(sent.split()) != 0:
+                    if self.word2idx is not None:
+                        sent = self.word2idx(sent)
+                    if self.tag2idx is not None:
+                        tag = self.tag2idx(tag)
+                    # yield a tuple (words, tag)
+                    yield sent, tag
+                
+    def __len__(self):
+        """Iterates once over the corpus to set and store length"""
+        if self.length is None:
+            self.length = 0
+            for _ in self:
+                self.length += 1
+        return self.length
 
-def process_data(original, dict_abbs):
-	process = UniStd(original)
-	# process = re.findall('[a-zA-ZàáãạảăắằẳẵặâấầẩẫậèéẹẻẽêềếểễệđìíĩỉịòóõọỏôốồổỗộơớờởỡợùúũụủưứừửữựỳỵỷỹýÀÁÃẠẢĂẮẰẲẴẶÂẤẦẨẪẬÈÉẸẺẼÊỀẾỂỄỆĐÌÍĨỈỊÒÓÕỌỎÔỐỒỔỖỘƠỚỜỞỠỢÙÚŨỤỦƯỨỪỬỮỰỲỴỶỸÝ\s\d\\.,!?\\-/]+', process)
-	process = re.sub('[^a-zA-ZàáãạảăắằẳẵặâấầẩẫậèéẹẻẽêềếểễệđìíĩỉịòóõọỏôốồổỗộơớờởỡợùúũụủưứừửữựỳỵỷỹýÀÁÃẠẢĂẮẰẲẴẶÂẤẦẨẪẬÈÉẸẺẼÊỀẾỂỄỆĐÌÍĨỈỊÒÓÕỌỎÔỐỒỔỖỘƠỚỜỞỠỢÙÚŨỤỦƯỨỪỬỮỰỲỴỶỸÝ0-9 ]+', '', process)
-	# process = re.findall(r'[a-zA-ZàáãạảăắằẳẵặâấầẩẫậèéẹẻẽêềếểễệđìíĩỉịòóõọỏôốồổỗộơớờởỡợùúũụủưứừửữựỳỵỷỹýÀÁÃẠẢĂẮẰẲẴẶÂẤẦẨẪẬÈÉẸẺẼÊỀẾỂỄỆĐÌÍĨỈỊÒÓÕỌỎÔỐỒỔỖỘƠỚỜỞỠỢÙÚŨỤỦƯỨỪỬỮỰỲỴỶỸÝ\s\d]+', process)
+    @staticmethod
+    def process_sent(sent):
+        sent = re.sub('[^0-9a-zA-Z ]+', '', sent)
+        return sent.lower()
 
-	text = process.lower()
-	for key, value in dict_abbs.items():
-		# find word with spaces in text
-		# if (' ' + key + ' ') in (' ' + text + ' '):
-		# 	text = text.replace(' ' + key + ' ', ' ' + value + ' ')
-		match_string = r'\b' + key + r'\b'
-		regex = re.compile(match_string, re.S)
-		text = regex.sub(lambda m: m.group().replace(key,value,1), text)
-	text = text.replace('\xa0', '') # error in encode
-	text = re.sub(r'([a-z])\1+', r'',text) # remove duplicate charater in word: ơiiiiiiiiiii
-	text = ' '.join(text.split())
-	text = text.strip()
-	text = word_tokenize(text, format="text")
 
-	return text
+class seqPAD:
+    @staticmethod
+    def _pad_sequences(sequences, pad_tok, max_length):
+        """
+        Args:
+            sequences: a generator of list or tuple
+            pad_tok: the word to pad with
+    
+        Returns:
+            a list of list where each sublist has same length
+        """
+        sequence_padded, sequence_length = [], []
+    
+        for seq in sequences:
+            seq = list(seq)
+            seq_ = seq[:max_length] + [pad_tok]*max(max_length - len(seq), 0)
+            sequence_padded += [seq_]
+            sequence_length += [min(len(seq), max_length)]
+    
+        return sequence_padded, sequence_length
 
-def UniStd_L(str):
-	return str.\
-		replace(u'à',u'à').replace(u'ã',u'ã').replace(u'ả',u'ả').replace(u'á',u'á').replace(u'ạ',u'ạ').\
-		replace(u'ằ',u'ằ').replace(u'ẵ',u'ẵ').replace(u'ẳ',u'ẳ').replace(u'ắ',u'ắ').replace(u'ặ',u'ặ').\
-		replace(u'ầ',u'ầ').replace(u'ẫ',u'ẫ').replace(u'ẩ',u'ẩ').replace(u'ấ',u'ấ').replace(u'ậ',u'ậ').\
-		replace(u'ỳ',u'ỳ').replace(u'ỹ',u'ỹ').replace(u'ỷ',u'ỷ').replace(u'ý',u'ý').replace(u'ỵ',u'ỵ').\
-		replace(u'ì',u'ì').replace(u'ĩ',u'ĩ').replace(u'ỉ',u'ỉ').replace(u'í',u'í').replace(u'ị',u'ị').\
-		replace(u'ù',u'ù').replace(u'ũ',u'ũ').replace(u'ủ',u'ủ').replace(u'ú',u'ú').replace(u'ụ',u'ụ').\
-		replace(u'ừ',u'ừ').replace(u'ữ',u'ữ').replace(u'ử',u'ử').replace(u'ứ',u'ứ').replace(u'ự',u'ự').\
-		replace(u'è',u'è').replace(u'ẽ',u'ẽ').replace(u'ẻ',u'ẻ').replace(u'é',u'é').replace(u'ẹ',u'ẹ').\
-		replace(u'ề',u'ề').replace(u'ễ',u'ễ').replace(u'ể',u'ể').replace(u'ế',u'ế').replace(u'ệ',u'ệ').\
-		replace(u'ò',u'ò').replace(u'õ',u'õ').replace(u'ỏ',u'ỏ').replace(u'ó',u'ó').replace(u'ọ',u'ọ').\
-		replace(u'ờ',u'ờ').replace(u'ỡ',u'ỡ').replace(u'ở',u'ở').replace(u'ớ',u'ớ').replace(u'ợ',u'ợ').\
-		replace(u'ồ',u'ồ').replace(u'ỗ',u'ỗ').replace(u'ổ',u'ổ').replace(u'ố',u'ố').replace(u'ộ',u'ộ').\
-		replace(u'òa',u'oà').replace(u'õa',u'oã').replace(u'ỏa',u'oả').replace(u'óa',u'oá').replace(u'ọa',u'oạ').\
-		replace(u'òe',u'oè').replace(u'õe',u'oẽ').replace(u'ỏe',u'oẻ').replace(u'óe',u'oé').replace(u'ọe',u'oẹ').\
-		replace(u'ùy',u'uỳ').replace(u'ũy',u'uỹ').replace(u'ủy',u'uỷ').replace(u'úy',u'uý').replace(u'ụy',u'uỵ').\
-		replace(u'aó',u'áo')
+    @staticmethod
+    def pad_sequences(sequences, pad_tok, nlevels=1, wthres=1024, cthres=32):
+        """
+        Args:
+            sequences: a generator of list or tuple
+            pad_tok: the word to pad with
+            nlevels: "depth" of padding, for the case where we have word ids
+    
+        Returns:
+            a list of list where each sublist has same length
+    
+        """
+        if nlevels == 1:
+            max_length = max(map(lambda x: len(x), sequences))
+            max_length = min(wthres, max_length)
+            sequence_padded, sequence_length = seqPAD._pad_sequences(sequences, pad_tok, max_length)
+    
+        elif nlevels == 2:
+            max_length_word = max([max(map(lambda x: len(x), seq)) for seq in sequences])
+            max_length_word = min(cthres, max_length_word)
+            sequence_padded, sequence_length = [], []
+            for seq in sequences:
+                # pad the word-level first to make the word length being the same
+                sp, sl = seqPAD._pad_sequences(seq, pad_tok, max_length_word)
+                sequence_padded += [sp]
+                sequence_length += [sl]
+            # pad the word-level to make the sequence length being the same
+            max_length_sentence = max(map(lambda x: len(x), sequences))
+            max_length_sentence = min(wthres, max_length_sentence)
+            sequence_padded, _ = seqPAD._pad_sequences(sequence_padded, [pad_tok] * max_length_word, max_length_sentence)
+            # set sequence length to 1 by inserting padding 
+            sequence_length, _ = seqPAD._pad_sequences(sequence_length, 1, max_length_sentence)
+    
+        return sequence_padded, sequence_length
 
-def UniStd_H(str):
-	return str.\
-		replace(u'À',u'À').replace(u'Ã',u'Ã').replace(u'Ả',u'Ả').replace(u'Á',u'Á').replace(u'Ạ',u'Ạ').\
-		replace(u'Ằ',u'Ằ').replace(u'Ẵ',u'Ẵ').replace(u'Ẳ',u'Ẳ').replace(u'Ắ',u'Ắ').replace(u'Ặ',u'Ặ').\
-		replace(u'Ầ',u'Ầ').replace(u'Ẫ',u'Ẫ').replace(u'Ẩ',u'Ẩ').replace(u'Ấ',u'Ấ').replace(u'Ậ',u'Ậ').\
-		replace(u'Ỳ',u'Ỳ').replace(u'Ỹ',u'Ỹ').replace(u'Ỷ',u'Ỷ').replace(u'Ý',u'Ý').replace(u'Ỵ',u'Ỵ').\
-		replace(u'Ì',u'Ì').replace(u'Ĩ',u'Ĩ').replace(u'Ỉ',u'Ỉ').replace(u'Í',u'Í').replace(u'Ị',u'Ị').\
-		replace(u'Ù',u'Ù').replace(u'Ũ',u'Ũ').replace(u'Ủ',u'Ủ').replace(u'Ú',u'Ú').replace(u'Ụ',u'Ụ').\
-		replace(u'Ừ',u'Ừ').replace(u'Ữ',u'Ữ').replace(u'Ử',u'Ử').replace(u'Ứ',u'Ứ').replace(u'Ự',u'Ự').\
-		replace(u'È',u'È').replace(u'Ẽ',u'Ẽ').replace(u'Ẻ',u'Ẻ').replace(u'É',u'É').replace(u'Ẹ',u'Ẹ').\
-		replace(u'Ề',u'Ề').replace(u'Ễ',u'Ễ').replace(u'Ể',u'Ể').replace(u'Ế',u'Ế').replace(u'Ệ',u'Ệ').\
-		replace(u'Ò',u'Ò').replace(u'Õ',u'Õ').replace(u'Ỏ',u'Ỏ').replace(u'Ó',u'Ó').replace(u'Ọ',u'Ọ').\
-		replace(u'Ờ',u'Ờ').replace(u'Ỡ',u'Ỡ').replace(u'Ở',u'Ở').replace(u'Ớ',u'Ớ').replace(u'Ợ',u'Ợ').\
-		replace(u'Ồ',u'Ồ').replace(u'Ỗ',u'Ỗ').replace(u'Ổ',u'Ổ').replace(u'Ố',u'Ố').replace(u'Ộ',u'Ộ').\
-		replace(u'ÒA',u'OÀ').replace(u'ÕA',u'OÃ').replace(u'ỎA',u'OẢ').replace(u'ÓA',u'OÁ').replace(u'ỌA',u'OẠ').\
-		replace(u'ÒE',u'OÈ').replace(u'ÕE',u'OẼ').replace(u'ỎE',u'OẺ').replace(u'ÓE',u'OÉ').replace(u'ỌE',u'OẸ').\
-		replace(u'ÙY',u'UỲ').replace(u'ŨY',u'UỸ').replace(u'ỦY',u'UỶ').replace(u'ÚY',u'UÝ').replace(u'ỤY',u'UỴ')
 
-def UniStd(str):
-	return UniStd_L(UniStd_H(str)).\
-		replace(u'òA',u'oà').replace(u'õA',u'oã').replace(u'ỏA',u'oả').replace(u'óA',u'oá').replace(u'ọA',u'oạ').\
-		replace(u'òE',u'oè').replace(u'õE',u'oẽ').replace(u'ỏE',u'oẻ').replace(u'óE',u'oé').replace(u'ọE',u'oẹ').\
-		replace(u'ùY',u'uỳ').replace(u'ũY',u'uỹ').replace(u'ủY',u'uỷ').replace(u'úY',u'uý').replace(u'ụY',u'uỵ').\
-		replace(u'Òa',u'Oà').replace(u'Õa',u'Oã').replace(u'Ỏa',u'Oả').replace(u'Óa',u'Oá').replace(u'Ọa',u'Oạ').\
-		replace(u'Òe',u'Oè').replace(u'Õe',u'Oẽ').replace(u'Ỏe',u'Oẻ').replace(u'Óe',u'Oé').replace(u'Ọe',u'Oẹ').\
-		replace(u'Ùy',u'Uỳ').replace(u'Ũy',u'Uỹ').replace(u'Ủy',u'Uỷ').replace(u'Úy',u'Uý').replace(u'Ụy',u'Uỵ')
+class Embeddings:
+    @staticmethod
+    def load_embs(fname):
+        embs = dict()
+        s = 0
+        V = 0
+        with open(fname, 'r', encoding="utf-8") as f:
+            for line in f: 
+                p = line.strip().split()
+                if len(p) == 2:
+                    V = int(p[0])     # Vocabulary
+                    s = int(p[1])     # embeddings size
+                else:
+                    # assert len(p)== s+1
+                    w = "".join(p[0])
+                    # print(p)
+                    e = [float(i) for i in p[1:]]
+                    embs[w] = np.array(e, dtype="float32")
+#        assert len(embs) == V
+        return embs 
+    
+    @staticmethod
+    def get_W(emb_file, wsize, vocabx, scale=0.25):
+        """
+        Get word matrix. W[i] is the vector for word indexed by i
+        """
+        print("Extracting pretrained embeddings:")
+        word_vecs = Embeddings.load_embs(emb_file)
+        print('\t%d pre-trained word embeddings'% (len(word_vecs)))
+        print('Mapping to vocabulary:')
+        unk = 0
+        part = 0
+        W = np.zeros(shape=(len(vocabx), wsize), dtype="float32")
+        for word, idx in vocabx.items():
+            if idx == 0:
+                continue
+            if word_vecs.get(word) is not None:
+                W[idx] = word_vecs.get(word)
+            else:
+                if word_vecs.get(word.lower()) is not None:
+                    W[idx] = word_vecs.get(word.lower())
+                    part += 1
+                else:
+                    unk += 1
+                    rvector = np.asarray(np.random.uniform(-scale, scale, (1, wsize)), dtype="float32")
+                    W[idx] = rvector
+        print('\t%d randomly word vectors;' % unk)
+        print('\t%d partially word vectors;'% part)
+        print('\t%d pre-trained embeddings.'% (len(vocabx)-unk-part))
+        return W
 
-# print(load_file())
-dict_abbs = abb_file()
-load_file(dict_abbs)
-# print(abb_words)
+    @staticmethod
+    def init_W(wsize, vocabx, scale=0.25):
+        """
+        Randomly initial word vectors between [-scale, scale]
+        """
+        W = np.zeros(shape=(len(vocabx), wsize), dtype="float32")
+        for word, idx in vocabx.iteritems():
+            if idx == 0:
+                continue
+            rvector = np.asarray(np.random.uniform(-scale, scale, (1, wsize)), dtype="float32")
+            W[idx] = rvector
+        return W
+
+
+class Data2tensor:
+    @staticmethod
+    def idx2tensor(indexes, device=torch.device("cpu")):
+        vec = torch.tensor(indexes, dtype=torch.long, device=device)
+        return vec
+
+    @staticmethod
+    def sort_tensors(label_ids, word_ids, sequence_lengths, device=torch.device("cpu")):
+        label_tensor = Data2tensor.idx2tensor(label_ids, device)
+        word_tensor = Data2tensor.idx2tensor(word_ids, device)
+        sequence_lengths = Data2tensor.idx2tensor(sequence_lengths, device)
+        sequence_lengths, word_perm_idx = sequence_lengths.sort(0, descending=True)
+        word_tensor = word_tensor[word_perm_idx]
+        label_tensor = label_tensor[word_perm_idx]
+        _, word_seq_recover = word_perm_idx.sort(0, descending=False)
+        return label_tensor, word_tensor, sequence_lengths, word_seq_recover
+
+
+if __name__ == "__main__":
+    filename = "../data/test.csv"
+    vocab = Vocab(wl_th=None, cutoff=2)
+    vocab.build([filename], firstline=False)
+    word2idx = vocab.wd2idx(vocab.w2i)
+    tag2idx = vocab.tag2idx(vocab.l2i)
+    train_data = Txtfile(filename, firstline=True, word2idx=word2idx, tag2idx=tag2idx)
+    # print(train_data)
+
+    train_iters = Vocab.minibatches(train_data, batch_size=4)
+    data = []
+    label_ids = []
+    c = 0
+    for words, labels in train_iters:
+        c += 1
+        if len(words) == 0:
+            print(words, labels, c)
+        data.append(words)
+        label_ids.append(labels)
+        word_ids, sequence_lengths = seqPAD.pad_sequences(words, pad_tok=0, wthres=1024)
+
+    w_tensor = Data2tensor.idx2tensor(word_ids)
+    y_tensor = Data2tensor.idx2tensor(labels)
+
+    data_tensors = Data2tensor.sort_tensors(labels, word_ids, sequence_lengths)
+    label_tensor, word_tensor, sequence_lengths, word_seq_recover = data_tensors
+
+
