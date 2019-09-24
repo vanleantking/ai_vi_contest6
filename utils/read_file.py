@@ -24,31 +24,39 @@ def abb_file():
 				abb_words[key.strip()] = values
 	return abb_words
 
-def load_file(dict_abbs, train_file, save_path):
+def load_file(dict_abbs, files, save_path):
 
-	split_re = re.compile("test_\\d{2,}")
-	all_reviews = list()
-	with open(train_file, 'r', encoding="utf-8") as data_file:
+	for file_type, file_path in files.items():
+		if file_type == "test":
+			split_re = re.compile("test_\\d{2,}")
+		else:
+			split_re = re.compile("train_\\d{2,}")
+		all_reviews = list()
+		with open(file_path, 'r', encoding="utf-8") as data_file:
 
-		file_split = split_re.split(data_file.read())
-		file_split = list(filter(lambda x: x != '', file_split))
-		
-		for label_data in file_split:
-			d = {}
-			data = label_data.split("\n")
-			data = list(filter(lambda x: x != '', data))
-			# print(label_data, data)
-			label = data[-1]
-			text = ' '.join(data[:-1])
-			if text != "" :
-				review = process_data(text, dict_abbs)
-				d['text'] = review
-				d['label'] = label
-				all_reviews.append(d)
-	reviews_pd = pd.DataFrame.from_dict(all_reviews, orient='columns')
-	# reviews_pd = reviews_pd.sample(frac=1).reset_index(drop=True)
-	reviews_pd.to_csv(save_path, sep=',', encoding='utf-8',
-		header=True, columns=['text', 'label'], index=False)
+			file_split = split_re.split(data_file.read())
+			file_split = list(filter(lambda x: x != '', file_split))
+			
+			for label_data in file_split:
+				d = {}
+				data = label_data.split("\n")
+				data = list(filter(lambda x: x != '', data))
+				# print(label_data, data)
+				if file_type == "train":
+					label = data[-1]
+					text = ' '.join(data[:-1])
+				else:
+					text = ' '.join(data)
+				if text != "" :
+					review = process_data(text, dict_abbs)
+					d['text'] = review
+					if file_type == "train":
+						d['label'] = label
+					all_reviews.append(d)
+			reviews_pd = pd.DataFrame.from_dict(all_reviews, orient='columns')
+			# reviews_pd = reviews_pd.sample(frac=1).reset_index(drop=True)
+			reviews_pd.to_csv(save_path[file_type], sep=',', encoding='utf-8',
+				header=True, columns=['text', 'label'], index=False)
 	return reviews_pd
 
 def process_data(original, dict_abbs):
@@ -123,5 +131,7 @@ def UniStd(str):
 # print(load_file())
 dict_abbs = abb_file()
 # load_file(dict_abbs, TRAIN_FILE, process_train)
-load_file(dict_abbs, TEST_FILE, process_test)
+files = {"test": TEST_FILE, "train": TRAIN_FILE}
+save_path = {"test": process_test, "train": process_train}
+load_file(dict_abbs, files, save_path)
 # print(abb_words)

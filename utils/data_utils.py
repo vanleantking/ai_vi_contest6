@@ -44,7 +44,8 @@ class Vocab(object):
                 sent = sent.split()
                 wcnt.update(sent)
                 wl = max(wl, len(sent))
-                lcnt.update([label])
+                if label != "":
+                    lcnt.update([label])
                 count += 1
         print("\t%d total samples, %d total tokens, %d total labels" % (count, sum(wcnt.values()), sum(lcnt.values())))
         wlst = [x for x, y in wcnt.items() if y >= self.cutoff]
