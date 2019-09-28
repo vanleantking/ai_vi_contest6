@@ -31,7 +31,8 @@ class Classifier(object):
         self.args = args  
         self.device = torch.device("cuda:0" if self.args.use_cuda else "cpu")
         # word_layers = 1
-        word_bidirect = True        
+        word_bidirect = True     
+        print("word size, ", len(self.args.vocab.w2i))   
         word_HPs = [self.args.word_nnmode, len(self.args.vocab.w2i), self.args.word_dim,
                     self.args.word_pred_embs, self.args.word_hidden_dim, self.args.dropout,
                     self.args.word_layers, word_bidirect, self.args.zero_padding, self.args.word_att]
@@ -80,6 +81,34 @@ class Classifier(object):
             speed = len(y_true)/end
         return measures, speed
 
+    def test_predict(self, eva_data):
+        with torch.no_grad():
+            wl = self.args.vocab.wl
+            batch_size = self.args.batch_size  
+             ## set model in eval model
+            self.model.eval()
+            start = time.time()
+            # y_true = Data2tensor.idx2tensor([], self.device)
+            y_pred = Data2tensor.idx2tensor([], self.device)
+            for i,(words, label_ids) in enumerate(self.args.vocab.minibatches(eva_data, batch_size=batch_size)):
+                word_ids, sequence_lengths = seqPAD.pad_sequences(words, pad_tok=0, wthres=wl)
+        
+                data_tensors = Data2tensor.sort_tensors(label_ids, word_ids,sequence_lengths, self.device)
+                _, word_tensor, sequence_lengths, word_seq_recover = data_tensors
+
+                # y_true = torch.cat([y_true,label_tensor])
+                label_score = self.model(word_tensor, sequence_lengths)
+                label_prob, label_pred = self.model.inference(label_score, k=1)
+                
+                y_pred = torch.cat([y_pred, label_pred])
+            #measures = Classifier.class_metrics(y_true, y_pred.squeeze())
+            # measures = Classifier.class_metrics(y_true.data.cpu().numpy(), y_pred.squeeze().data.cpu().numpy())
+
+            end = time.time() - start
+            speed = len(y_true)/end
+        return y_pred, speed
+
+
     def train_batch(self,train_data):
         wl = self.args.vocab.wl
         clip_rate = self.args.clip
@@ -99,6 +128,7 @@ class Classifier(object):
 
             self.model.zero_grad()
             label_score = self.model(word_tensor, sequence_lengths)
+            print("inside training batch, ", label_score.size(), label_tensor.size(), label_tensor)
             batch_loss = self.model.NLL_loss(label_score, label_tensor)
             train_loss.append(batch_loss.item())
             
@@ -120,7 +150,7 @@ class Classifier(object):
 
     def train(self):            
         train_data = Txtfile(self.args.train_file, firstline=False, word2idx=self.word2idx, tag2idx=self.tag2idx)
-        dev_data = Txtfile(self.args.dev_file, firstline=False, word2idx=self.word2idx, tag2idx=self.tag2idx)
+        #dev_data = Txtfile(self.args.dev_file, firstline=False, word2idx=self.word2idx, tag2idx=self.tag2idx)
         test_data = Txtfile(self.args.test_file, firstline=False, word2idx=self.word2idx, tag2idx=self.tag2idx)
 
         max_epochs = self.args.max_epochs
@@ -136,51 +166,37 @@ class Classifier(object):
             print("Epoch: %s/%s" %(epoch,max_epochs))
             train_loss = self.train_batch(train_data)
             # evaluate on developing data
-            dev_metrics, dev_speed = self.evaluate_batch(dev_data)
-            dev_metric_standard = dev_metrics["prf_macro"][2]
-            if dev_metric_standard > best_dev:
-                nepoch_no_imprv = 0
-                saved_epoch = epoch
-                best_dev = dev_metric_standard
-                best_metrics = dev_metrics
-                print("UPDATES: - New improvement")  
-                print("         - Train loss: %.4f"%train_loss)
-                print("         - Dev acc: %.2f(%%); Dev P: %.2f(%%); Dev R: %.2f(%%);Dev F1: %.2f(%%); Dev speed: %.2f(sent/s)"%(100*dev_metrics["acc"],
-                      100*dev_metrics["prf_macro"][0], 100*dev_metrics["prf_macro"][1], 100*dev_metrics["prf_macro"][2], dev_speed))
-                print("         - Save the model to %s at epoch %d"%(self.args.model_name,saved_epoch))
+            #dev_metrics, dev_speed = self.evaluate_batch(dev_data)
+            #dev_metric_standard = dev_metrics["prf_macro"][2]
+            #if dev_metric_standard > best_dev:
+                #nepoch_no_imprv = 0
+                #saved_epoch = epoch
+                #best_dev = dev_metric_standard
+                #best_metrics = dev_metrics
+            print("UPDATES: - New improvement")  
+            print("         - Train loss: %.4f"%train_loss)
+                #print("         - Dev acc: %.2f(%%); Dev P: %.2f(%%); Dev R: %.2f(%%);Dev F1: %.2f(%%); Dev speed: %.2f(sent/s)"%(100*dev_metrics["acc"],
+                #      100*dev_metrics["prf_macro"][0], 100*dev_metrics["prf_macro"][1], 100*dev_metrics["prf_macro"][2], dev_speed))
+                #print("         - Save the model to %s at epoch %d"%(self.args.model_name,saved_epoch))
                 # Conver model to CPU to avoid out of GPU memory
-                self.model.to("cpu")
-                torch.save(self.model.state_dict(), self.args.model_name)
-                self.model.to(self.device)
-            else:
-                nepoch_no_imprv += 1
-                if nepoch_no_imprv >= self.args.patience:
-                    self.model.load_state_dict(torch.load(self.args.model_name))
-                    self.model.to(self.device)
-                    test_metrics, test_speed = self.evaluate_batch(test_data)
-                    print("\nSUMMARY: - Early stopping after %d epochs without improvements"%(nepoch_no_imprv))
-                    print("         - Dev acc: %.2f(%%); Dev P: %.2f(%%); Dev R: %.2f(%%);Dev F1: %.2f(%%)"%(100*best_metrics["acc"],
-                          100*best_metrics["prf_macro"][0], 100*best_metrics["prf_macro"][1], 100*best_metrics["prf_macro"][2]))
-                    print("         - Load the best model from: %s at epoch %d"%(self.args.model_name,saved_epoch))                    
-                    print("         - Test acc: %.2f(%%); Test P: %.2f(%%); Test R: %.2f(%%);Test F1: %.2f(%%); "
-                          "Test speed: %.2f(sent/s)"%(100*test_metrics["acc"], 100*test_metrics["prf_macro"][0],
-                                                      100*test_metrics["prf_macro"][1],
-                                                      100*test_metrics["prf_macro"][2], test_speed))
-                
-                    return
+            self.model.to("cpu")
+            torch.save(self.model.state_dict(), self.args.model_name)
+            self.model.to(self.device)
 
             epoch_finish = Timer.timeEst(epoch_start,(epoch+1)/max_epochs)
             print("\nINFO: - Trained time(Remained time for %d epochs: %s"%(max_epochs, epoch_finish))
         
         self.model.load_state_dict(torch.load(self.args.model_name))
         self.model.to(self.device)
-        test_metrics, test_speed = self.evaluate_batch(test_data)
+        y_predict, test_speed = self.test_predict(test_data)
+        
+        df = pd.DataFrame(y_predict.squeeze().tolist(), columns=["colummn"])
+        df.to_csv(self.args.predict_path, index=False)
         print("\nSUMMARY: - Completed %d epoches"%(max_epochs))
         print("         - Dev acc: %.2f(%%); Dev P: %.2f(%%); Dev R: %.2f(%%);Dev F1: %.2f(%%)"%(100*best_metrics["acc"],
               100*best_metrics["prf_macro"][0], 100*best_metrics["prf_macro"][1], 100*best_metrics["prf_macro"][2]))
         print("         - Load the best model from: %s at epoch %d"%(self.args.model_name,saved_epoch))
-        print("         - Test acc: %.2f(%%); Test P: %.2f (%%); Test R: %.2f(%%);Test F1: %.2f(%%); Test speed: %.2f(sent/s)"%(100*test_metrics["acc"],
-              100*test_metrics["prf_macro"][0], 100*test_metrics["prf_macro"][1], 100*test_metrics["prf_macro"][2], test_speed))
+        print("         - Test acc: ")
         return 
 
     def predict(self, sent, k=1):
@@ -296,9 +312,9 @@ if __name__ == '__main__':
     
     args = build_data(args)
     
-    # args.filter_size = [2,3,4,5] # fitler size for cnn network
-    # args.out_channels = 32 # Choose out_channel for cnn network
+    args.filter_size = [1,2,3,4] # fitler size for cnn network
+    args.out_channels = 32 # Choose out_channel for cnn network
     
-    # classifier = Classifier(args)
+    classifier = Classifier(args)
 
-    # classifier.train()
+    classifier.train()

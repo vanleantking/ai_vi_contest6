@@ -175,7 +175,7 @@ class BiRNN(nn.Module):
         self.fc1 = nn.Linear(fc_in, 300, bias=True)
         self.fc2 = nn.Linear(300, 200)
         self.fc3 = nn.Linear(200, 50)
-        self.fc4 = nn.Linear(50, 5)
+        self.fc4 = nn.Linear(50, 1)
 
         if self.use_batchnorm:
             self.bn1 = nn.BatchNorm1d(300)
@@ -198,6 +198,7 @@ class BiRNN(nn.Module):
         
         out_cnn = self.cnn(y)
         out_cnn = self.linear_batchnormalize(out_cnn)
+        print("out cnn, ", out_cnn.size())
         return out_cnn
 
     # fully connected layer use batch normalize
