@@ -154,7 +154,8 @@ class BiRNN(nn.Module):
     """
     This module take embedding inputs (characters or words) feeding to an RNN layer before adding a softmax function for classification
     """
-    def __init__(self, word_HPs=None, fc_drop = 0.1, filter_size = [2,3,4,5], out_channels = 32, use_batchnorm = False, num_labels=None):
+    def __init__(self, word_HPs=None, fc_drop = 0.1, filter_size = [2,3,4,5], out_channels = 32,
+        embed_size = 32, use_batchnorm = False, num_labels=None):
         super(BiRNN, self).__init__()
         [nnmode, word_size, word_dim, wd_embeddings, word_hidden_dim,
          word_dropout, word_layers, word_bidirect, zero_padding, word_att] = word_HPs
@@ -167,8 +168,8 @@ class BiRNN(nn.Module):
         self.dropout_fc = nn.Dropout(fc_drop)
         hidden_dim = word_hidden_dim
 
-        self.cnn = CNNLayer(filter_size = self.filter_size,
-            use_batchnorm = self.use_batchnorm)
+        self.cnn = CNNLayer(filter_size = self.filter_size, out_channels = out_channels,
+            embed_size = embed_size, use_batchnorm = self.use_batchnorm)
 
         self.activation = nn.ReLU()
         fc_in = len(self.filter_size) * out_channels
@@ -198,7 +199,7 @@ class BiRNN(nn.Module):
         
         out_cnn = self.cnn(y)
         out_cnn = self.linear_batchnormalize(out_cnn)
-        print("out cnn, ", out_cnn.size())
+        # print("out cnn, ", out_cnn.size())
         return out_cnn
 
     # fully connected layer use batch normalize

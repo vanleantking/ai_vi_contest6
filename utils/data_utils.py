@@ -148,9 +148,11 @@ class Txtfile(object):
                 next(f)
             for line in itertools.islice(f, self.limit):
                 line = line.strip().split(",")
-                sent = line[0]
+                if len(line[0].split()) != 0:
+                    sent = line[0]
+                else:
+                    sent = "tốt"
                 tag = line[1]
-                # if len(sent.split()) != 0:
                 if self.word2idx is not None:
                     sent = self.word2idx(sent)
                 if self.tag2idx is not None:

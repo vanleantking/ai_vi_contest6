@@ -128,7 +128,7 @@ class Classifier(object):
 
             self.model.zero_grad()
             label_score = self.model(word_tensor, sequence_lengths)
-            print("inside training batch, ", label_score.size(), label_tensor.size(), label_score, label_tensor)
+            # print("inside training batch, ", label_score.size(), label_tensor.size(), label_score, label_tensor)
             batch_loss = self.model.NLL_loss(label_score, label_tensor)
             train_loss.append(batch_loss.item())
             
@@ -150,7 +150,7 @@ class Classifier(object):
 
     def train(self):            
         train_data = Txtfile(self.args.train_file, firstline=False, word2idx=self.word2idx, tag2idx=self.tag2idx)
-        #dev_data = Txtfile(self.args.dev_file, firstline=False, word2idx=self.word2idx, tag2idx=self.tag2idx)
+        dev_data = Txtfile(self.args.dev_file, firstline=False, word2idx=self.word2idx, tag2idx=self.tag2idx)
         test_data = Txtfile(self.args.test_file, firstline=False, word2idx=self.word2idx)
 
         max_epochs = self.args.max_epochs
@@ -163,25 +163,41 @@ class Classifier(object):
         for epoch in range(max_epochs):
             if self.args.decay_rate>0: 
                 self.lr_decay(epoch)
-            print("Epoch: %s/%s" %(epoch,max_epochs))
+            print("Epoch: %s/%s" %(epoch,max_epochs), len(train_data))
             train_loss = self.train_batch(train_data)
             # evaluate on developing data
-            #dev_metrics, dev_speed = self.evaluate_batch(dev_data)
-            #dev_metric_standard = dev_metrics["prf_macro"][2]
-            #if dev_metric_standard > best_dev:
-                #nepoch_no_imprv = 0
-                #saved_epoch = epoch
-                #best_dev = dev_metric_standard
-                #best_metrics = dev_metrics
-            print("UPDATES: - New improvement")  
-            print("         - Train loss: %.4f"%train_loss)
-                #print("         - Dev acc: %.2f(%%); Dev P: %.2f(%%); Dev R: %.2f(%%);Dev F1: %.2f(%%); Dev speed: %.2f(sent/s)"%(100*dev_metrics["acc"],
-                #      100*dev_metrics["prf_macro"][0], 100*dev_metrics["prf_macro"][1], 100*dev_metrics["prf_macro"][2], dev_speed))
-                #print("         - Save the model to %s at epoch %d"%(self.args.model_name,saved_epoch))
+            dev_metrics, dev_speed = self.evaluate_batch(dev_data)
+            dev_metric_standard = dev_metrics["prf_macro"][2]
+            if dev_metric_standard > best_dev:
+                nepoch_no_imprv = 0
+                saved_epoch = epoch
+                best_dev = dev_metric_standard
+                best_metrics = dev_metrics
+                print("UPDATES: - New improvement")  
+                print("         - Train loss: %.4f"%train_loss)
+                print("         - Dev acc: %.2f(%%); Dev P: %.2f(%%); Dev R: %.2f(%%);Dev F1: %.2f(%%); Dev speed: %.2f(sent/s)"%(100*dev_metrics["acc"],
+                 100*dev_metrics["prf_macro"][0], 100*dev_metrics["prf_macro"][1], 100*dev_metrics["prf_macro"][2], dev_speed))
+                print("         - Save the model to %s at epoch %d"%(self.args.model_name,saved_epoch))
                 # Conver model to CPU to avoid out of GPU memory
-            self.model.to("cpu")
-            torch.save(self.model.state_dict(), self.args.model_name)
-            self.model.to(self.device)
+                self.model.to("cpu")
+                torch.save(self.model.state_dict(), self.args.model_name)
+                self.model.to(self.device)
+            else:
+                nepoch_no_imprv += 1
+                if nepoch_no_imprv >= self.args.patience:
+                    self.model.load_state_dict(torch.load(self.args.model_name))
+                    self.model.to(self.device)
+                    y_predict = self.test_predict(test_data)
+        
+                    df = pd.DataFrame(y_predict.squeeze().tolist(), columns=["colummn"])
+                    df.to_csv(self.args.predict_path, index=False)
+                    print("\nSUMMARY: - Completed %d epoches"%(max_epochs))
+                    print("         - Dev acc: %.2f(%%); Dev P: %.2f(%%); Dev R: %.2f(%%);Dev F1: %.2f(%%)"%(100*best_metrics["acc"],
+                          100*best_metrics["prf_macro"][0], 100*best_metrics["prf_macro"][1], 100*best_metrics["prf_macro"][2]))
+                    print("         - Load the best model from: %s at epoch %d"%(self.args.model_name,saved_epoch))
+                    print("         - Test acc: ")
+                    return
+
 
             epoch_finish = Timer.timeEst(epoch_start,(epoch+1)/max_epochs)
             print("\nINFO: - Trained time(Remained time for %d epochs: %s"%(max_epochs, epoch_finish))
@@ -255,7 +271,7 @@ if __name__ == '__main__':
 
     argparser.add_argument('--train_file', help='Trained file', default="./data/train.csv", type=str)
 
-    # argparser.add_argument('--dev_file', help='Developed file', default="./data/val.txt", type=str)
+    argparser.add_argument('--dev_file', help='Developed file', default="./data/val.csv", type=str)
 
     argparser.add_argument('--test_file', help='Tested file', default="./data/test.csv", type=str)
 
@@ -281,7 +297,7 @@ if __name__ == '__main__':
     argparser.add_argument("--word_dim", type=int, default=16, help="word_embedding vector size")
         
     # argparser.add_argument("--word_hidden_dim", type=int, default=600, help="LSTM word_hidden layers")
-    argparser.add_argument("--word_hidden_dim", type=int, default=32, help="LSTM word_hidden layers")
+    argparser.add_argument("--word_hidden_dim", type=int, default=64, help="LSTM word_hidden layers")
                 
     # argparser.add_argument("--dropout", type=float, default=0.3, help="dropout rate")
     argparser.add_argument("--dropout", type=float, default=0.4, help="dropout rate")
@@ -294,9 +310,9 @@ if __name__ == '__main__':
     
     argparser.add_argument("--decay_rate", type=float, default=0.05, help="decay learning rate")
         
-    argparser.add_argument("--max_epochs", type=int, default=12, help="maximum # of epochs")
+    argparser.add_argument("--max_epochs", type=int, default=32, help="maximum # of epochs")
     
-    argparser.add_argument("--batch_size", type=int, default=32, help="batch size")
+    argparser.add_argument("--batch_size", type=int, default=64, help="batch size")
     
     argparser.add_argument('--clip', type=int, default=5, help='Clipping value')
         
@@ -314,7 +330,7 @@ if __name__ == '__main__':
     
     args.filter_size = [1,2,3,4] # fitler size for cnn network
     args.predict_path = "./data/test_predict.csv"
-    args.out_channels = 32 # Choose out_channel for cnn network
+    args.out_channels = 64 # Choose out_channel for cnn network
     
     classifier = Classifier(args)
 
