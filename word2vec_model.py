@@ -15,6 +15,7 @@ import numpy as np
 import torch
 from sklearn import metrics
 import torch.optim as optim
+import pandas as pd
 
 from utils.core_nns import BiRNN as fNN
 from utils.other_utils import Progbar, Timer, SaveloadHP
