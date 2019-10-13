@@ -104,9 +104,9 @@ class Classifier(object):
             #measures = Classifier.class_metrics(y_true, y_pred.squeeze())
             # measures = Classifier.class_metrics(y_true.data.cpu().numpy(), y_pred.squeeze().data.cpu().numpy())
 
-            end = time.time() - start
-            speed = len(y_true)/end
-        return y_pred, speed
+            # end = time.time() - start
+            # speed = len(y_true)/end
+        return y_pred
 
 
     def train_batch(self,train_data):
@@ -128,7 +128,7 @@ class Classifier(object):
 
             self.model.zero_grad()
             label_score = self.model(word_tensor, sequence_lengths)
-            print("inside training batch, ", label_score.size(), label_tensor.size(), label_tensor)
+            print("inside training batch, ", label_score.size(), label_tensor.size(), label_score, label_tensor)
             batch_loss = self.model.NLL_loss(label_score, label_tensor)
             train_loss.append(batch_loss.item())
             
@@ -151,7 +151,7 @@ class Classifier(object):
     def train(self):            
         train_data = Txtfile(self.args.train_file, firstline=False, word2idx=self.word2idx, tag2idx=self.tag2idx)
         #dev_data = Txtfile(self.args.dev_file, firstline=False, word2idx=self.word2idx, tag2idx=self.tag2idx)
-        test_data = Txtfile(self.args.test_file, firstline=False, word2idx=self.word2idx, tag2idx=self.tag2idx)
+        test_data = Txtfile(self.args.test_file, firstline=False, word2idx=self.word2idx)
 
         max_epochs = self.args.max_epochs
         saved_epoch = 0
@@ -188,7 +188,7 @@ class Classifier(object):
         
         self.model.load_state_dict(torch.load(self.args.model_name))
         self.model.to(self.device)
-        y_predict, test_speed = self.test_predict(test_data)
+        y_predict = self.test_predict(test_data)
         
         df = pd.DataFrame(y_predict.squeeze().tolist(), columns=["colummn"])
         df.to_csv(self.args.predict_path, index=False)
@@ -197,7 +197,7 @@ class Classifier(object):
               100*best_metrics["prf_macro"][0], 100*best_metrics["prf_macro"][1], 100*best_metrics["prf_macro"][2]))
         print("         - Load the best model from: %s at epoch %d"%(self.args.model_name,saved_epoch))
         print("         - Test acc: ")
-        return 
+        return
 
     def predict(self, sent, k=1):
         """
@@ -294,7 +294,7 @@ if __name__ == '__main__':
     
     argparser.add_argument("--decay_rate", type=float, default=0.05, help="decay learning rate")
         
-    argparser.add_argument("--max_epochs", type=int, default=32, help="maximum # of epochs")
+    argparser.add_argument("--max_epochs", type=int, default=12, help="maximum # of epochs")
     
     argparser.add_argument("--batch_size", type=int, default=32, help="batch size")
     
@@ -313,6 +313,7 @@ if __name__ == '__main__':
     args = build_data(args)
     
     args.filter_size = [1,2,3,4] # fitler size for cnn network
+    args.predict_path = "./data/test_predict.csv"
     args.out_channels = 32 # Choose out_channel for cnn network
     
     classifier = Classifier(args)

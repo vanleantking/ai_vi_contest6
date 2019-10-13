@@ -150,16 +150,13 @@ class Txtfile(object):
                 line = line.strip().split(",")
                 sent = line[0]
                 tag = line[1]
-                # sent = " ".join(line[1:])
-                # tag = line[0]
-                # sent = Txtfile.process_sent(sent)
-                if len(sent.split()) != 0:
-                    if self.word2idx is not None:
-                        sent = self.word2idx(sent)
-                    if self.tag2idx is not None:
-                        tag = self.tag2idx(tag)
-                    # yield a tuple (words, tag)
-                    yield sent, tag
+                # if len(sent.split()) != 0:
+                if self.word2idx is not None:
+                    sent = self.word2idx(sent)
+                if self.tag2idx is not None:
+                    tag = self.tag2idx(tag)
+                # yield a tuple (words, tag)
+                yield sent, tag
                 
     def __len__(self):
         """Iterates once over the corpus to set and store length"""
@@ -321,7 +318,7 @@ if __name__ == "__main__":
     vocab.build([filename], firstline=False)
     word2idx = vocab.wd2idx(vocab.w2i)
     tag2idx = vocab.tag2idx(vocab.l2i)
-    train_data = Txtfile(filename, firstline=True, word2idx=word2idx, tag2idx=tag2idx)
+    train_data = Txtfile(filename, firstline=False, word2idx=word2idx, tag2idx=None)
     # print(train_data)
 
     train_iters = Vocab.minibatches(train_data, batch_size=4)
