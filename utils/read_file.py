@@ -53,6 +53,35 @@ def abb_file():
 				abb_words[key.strip()] = values
 	return abb_words
 
+def test_file(dict_abbs, files, save_path):
+
+	for file_type, file_path in files.items():
+		if file_type == "test":
+			split_re = re.compile("test_\\d{2,}")
+		all_reviews = list()
+		with open(file_path, 'r', encoding="utf-8") as data_file:
+			data_test = data_file.read()
+			labels = split_re.findall(data_test)
+
+			file_split = split_re.split(data_test)
+			file_split = list(filter(lambda x: x != '', file_split))
+			# print(file_split)
+			idx = 0
+			for label_data in file_split:
+				d = {}
+				data = label_data.split("\n")
+				data = list(filter(lambda x: x != '', data))
+				text = ' '.join(data)
+				# if text != "" :
+				review = process_data(text, dict_abbs)
+				d['text'] = review
+				d['label'] = labels[idx]
+				all_reviews.append(d)
+				idx += 1
+			reviews_pd = pd.DataFrame.from_dict(all_reviews, orient='columns')
+			reviews_pd.to_csv(save_path[file_type], sep=',', encoding='utf-8',
+				header=True, columns=['text', 'label'], index=False)
+
 def load_file(dict_abbs, files, save_path):
 
 	for file_type, file_path in files.items():
@@ -162,7 +191,7 @@ def UniStd(str):
 # print(load_file())
 dict_abbs = abb_file()
 # load_file(dict_abbs, TRAIN_FILE, process_train)
-files = {"test": TEST_FILE, "train": TRAIN_FILE}
-save_path = {"test": process_test, "train": process_train}
-load_file(dict_abbs, files, save_path)
+files = {"test": TEST_FILE}
+save_path = {"test": process_test}
+test_file(dict_abbs, files, save_path)
 # print(abb_words)

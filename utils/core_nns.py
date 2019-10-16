@@ -176,7 +176,7 @@ class BiRNN(nn.Module):
         self.fc1 = nn.Linear(fc_in, 300, bias=True)
         self.fc2 = nn.Linear(300, 200)
         self.fc3 = nn.Linear(200, 50)
-        self.fc4 = nn.Linear(50, 1)
+        self.fc4 = nn.Linear(50, 2)
 
         if self.use_batchnorm:
             self.bn1 = nn.BatchNorm1d(300)
@@ -209,7 +209,7 @@ class BiRNN(nn.Module):
             # pool_out = self.dropfinal(pool_out)
             out_cnn = self.fc1(pool_out)
             out_cnn = self.activation(out_cnn)
-            pool_out = self.dropout_fc(out_cnn)
+            out_cnn = self.dropout_fc(out_cnn)
             out_cnn = self.fc2(out_cnn)
             out_cnn = self.activation(out_cnn)
             out_cnn = self.dropout_fc(out_cnn)

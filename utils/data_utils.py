@@ -52,7 +52,7 @@ class Vocab(object):
         wlst = [PADw, UNKw, SOw, EOw] + wlst
         wvocab = dict([(y, x) for x, y in enumerate(wlst)])
         lvocab = dict([(y, x) for x, y in enumerate(lcnt.keys())])
-        print("\t%d unique tokens, %d unique labels" % (len(wcnt), len(lcnt)), lcnt)
+        print("\t%d unique tokens, %d unique labels" % (len(wcnt), len(lcnt)))
         print("\t%d unique tokens appearing at least %d times" % (len(wvocab)-4, self.cutoff))
         self.w2i = wvocab
         self.l2i = lvocab 
@@ -320,8 +320,7 @@ if __name__ == "__main__":
     vocab.build([filename], firstline=False)
     word2idx = vocab.wd2idx(vocab.w2i)
     tag2idx = vocab.tag2idx(vocab.l2i)
-    train_data = Txtfile(filename, firstline=False, word2idx=word2idx, tag2idx=None)
-    # print(train_data)
+    train_data = Txtfile(filename, firstline=False, word2idx=word2idx, tag2idx=tag2idx)
 
     train_iters = Vocab.minibatches(train_data, batch_size=4)
     data = []

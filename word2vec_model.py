@@ -89,15 +89,15 @@ class Classifier(object):
              ## set model in eval model
             self.model.eval()
             start = time.time()
-            # y_true = Data2tensor.idx2tensor([], self.device)
+            y_true = Data2tensor.idx2tensor([], self.device)
             y_pred = Data2tensor.idx2tensor([], self.device)
             for i,(words, label_ids) in enumerate(self.args.vocab.minibatches(eva_data, batch_size=batch_size)):
                 word_ids, sequence_lengths = seqPAD.pad_sequences(words, pad_tok=0, wthres=wl)
         
                 data_tensors = Data2tensor.sort_tensors(label_ids, word_ids,sequence_lengths, self.device)
-                _, word_tensor, sequence_lengths, word_seq_recover = data_tensors
+                label_tensor, word_tensor, sequence_lengths, word_seq_recover = data_tensors
 
-                # y_true = torch.cat([y_true,label_tensor])
+                y_true = torch.cat([y_true,label_tensor])
                 label_score = self.model(word_tensor, sequence_lengths)
                 label_prob, label_pred = self.model.inference(label_score, k=1)
                 
@@ -107,7 +107,7 @@ class Classifier(object):
 
             # end = time.time() - start
             # speed = len(y_true)/end
-        return y_pred
+        return y_pred, y_true
 
 
     def train_batch(self,train_data):
@@ -152,7 +152,7 @@ class Classifier(object):
     def train(self):            
         train_data = Txtfile(self.args.train_file, firstline=False, word2idx=self.word2idx, tag2idx=self.tag2idx)
         dev_data = Txtfile(self.args.dev_file, firstline=False, word2idx=self.word2idx, tag2idx=self.tag2idx)
-        test_data = Txtfile(self.args.test_file, firstline=False, word2idx=self.word2idx)
+        test_data = Txtfile(self.args.test_file, firstline=False, word2idx=self.word2idx, tag2idx=self.tag2idx)
 
         max_epochs = self.args.max_epochs
         saved_epoch = 0
@@ -188,9 +188,9 @@ class Classifier(object):
                 if nepoch_no_imprv >= self.args.patience:
                     self.model.load_state_dict(torch.load(self.args.model_name))
                     self.model.to(self.device)
-                    y_predict = self.test_predict(test_data)
-        
-                    df = pd.DataFrame(y_predict.squeeze().tolist(), columns=["colummn"])
+                    y_predict, label = self.test_predict(test_data)
+                    d = {"id": label.squeeze().tolist(),"label": y_predict.squeeze().tolist()}
+                    df = pd.DataFrame(d, columns=["id", "label"])
                     df.to_csv(self.args.predict_path, index=False)
                     print("\nSUMMARY: - Completed %d epoches"%(max_epochs))
                     print("         - Dev acc: %.2f(%%); Dev P: %.2f(%%); Dev R: %.2f(%%);Dev F1: %.2f(%%)"%(100*best_metrics["acc"],
@@ -205,9 +205,10 @@ class Classifier(object):
         
         self.model.load_state_dict(torch.load(self.args.model_name))
         self.model.to(self.device)
-        y_predict = self.test_predict(test_data)
+        y_predict, label = self.test_predict(test_data)
         
-        df = pd.DataFrame(y_predict.squeeze().tolist(), columns=["colummn"])
+        d = {"id": label.squeeze().tolist(),"label": y_predict.squeeze().tolist()}
+        df = pd.DataFrame(d, columns=["id", "label"])
         df.to_csv(self.args.predict_path, index=False)
         print("\nSUMMARY: - Completed %d epoches"%(max_epochs))
         print("         - Dev acc: %.2f(%%); Dev P: %.2f(%%); Dev R: %.2f(%%);Dev F1: %.2f(%%)"%(100*best_metrics["acc"],
