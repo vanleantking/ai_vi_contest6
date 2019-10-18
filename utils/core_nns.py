@@ -176,7 +176,7 @@ class BiRNN(nn.Module):
         self.fc1 = nn.Linear(fc_in, 300, bias=True)
         self.fc2 = nn.Linear(300, 200)
         self.fc3 = nn.Linear(200, 50)
-        self.fc4 = nn.Linear(50, 2)
+        self.fc4 = nn.Linear(50, 1)
 
         if self.use_batchnorm:
             self.bn1 = nn.BatchNorm1d(300)

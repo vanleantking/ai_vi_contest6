@@ -41,6 +41,9 @@ class Vocab(object):
         for fname in files:
             raw = Txtfile(fname, firstline=firstline, limit=limit)
             for sent, label in raw:
+                if sent == "":
+                    sent = "tốt"
+                    print(sent)
                 sent = sent.split()
                 wcnt.update(sent)
                 wl = max(wl, len(sent))
@@ -148,11 +151,10 @@ class Txtfile(object):
                 next(f)
             for line in itertools.islice(f, self.limit):
                 line = line.strip().split(",")
-                if len(line[0].split()) != 0:
-                    sent = line[0]
-                else:
-                    sent = "tốt"
+                sent = line[0]
                 tag = line[1]
+                if len(sent.split()) == 0:
+                    sent = "tốt"
                 if self.word2idx is not None:
                     sent = self.word2idx(sent)
                 if self.tag2idx is not None:

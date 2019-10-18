@@ -33,13 +33,13 @@ class Classifier(object):
         self.device = torch.device("cuda:0" if self.args.use_cuda else "cpu")
         # word_layers = 1
         word_bidirect = True     
-        print("word size, ", len(self.args.vocab.w2i))   
+        print("word size, ", len(self.args.vocab.w2i), len(self.args.vocab.l2i))   
         word_HPs = [self.args.word_nnmode, len(self.args.vocab.w2i), self.args.word_dim,
                     self.args.word_pred_embs, self.args.word_hidden_dim, self.args.dropout,
                     self.args.word_layers, word_bidirect, self.args.zero_padding, self.args.word_att]
         
         self.model = fNN(word_HPs=word_HPs, filter_size = self.args.filter_size, out_channels = self.args.out_channels,
-        use_batchnorm = self.args.use_batchnorm, num_labels=len(self.args.vocab.l2i)).to(self.device)
+        use_batchnorm = self.args.use_batchnorm, num_labels=2).to(self.device)
 
         if args.optimizer.lower() == "adamax":
             self.optimizer = optim.Adamax(self.model.parameters(), lr=self.args.lr)
@@ -189,6 +189,7 @@ class Classifier(object):
                     self.model.load_state_dict(torch.load(self.args.model_name))
                     self.model.to(self.device)
                     y_predict, label = self.test_predict(test_data)
+                    label = label - 2
                     d = {"id": label.squeeze().tolist(),"label": y_predict.squeeze().tolist()}
                     df = pd.DataFrame(d, columns=["id", "label"])
                     df.to_csv(self.args.predict_path, index=False)
@@ -206,6 +207,7 @@ class Classifier(object):
         self.model.load_state_dict(torch.load(self.args.model_name))
         self.model.to(self.device)
         y_predict, label = self.test_predict(test_data)
+        label = label - 2
         
         d = {"id": label.squeeze().tolist(),"label": y_predict.squeeze().tolist()}
         df = pd.DataFrame(d, columns=["id", "label"])
@@ -257,8 +259,8 @@ def build_data(args):
         os.mkdir(model_dir)
 
     vocab = Vocab(wl_th=args.word_thres, cutoff=args.cutoff)
-    # vocab.build([args.train_file, args.dev_file, args.test_file], firstline=False)
-    vocab.build([args.train_file, args.test_file], firstline=False)
+    vocab.build([args.train_file, args.dev_file, args.test_file], firstline=False)
+    # vocab.build([args.train_file, args.test_file], firstline=False)
     args.vocab = vocab
     if args.emb_file != "":
         args.word_pred_embs = Embeddings.get_W(args.emb_file,wsize=args.word_dim,vocabx=vocab.w2i)
