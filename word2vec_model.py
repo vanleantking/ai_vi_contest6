@@ -269,6 +269,20 @@ def build_data(args):
     SaveloadHP.save(args, args.model_args)
     return args
 
+def predict_from_model(model_path, args):
+    classifier = Classifier(args)
+    classifier.model.load_state_dict(torch.load(model_path))
+    # classifier.model = model_load
+
+
+    test_data = Txtfile(args.test_file, firstline=False, word2idx=classifier.word2idx, tag2idx=classifier.tag2idx)
+    y_pred, label = classifier.test_predict(test_data)
+
+    label = label - 2
+    d = {"id": label.squeeze().tolist(),"label": y_pred.squeeze().tolist()}
+    df = pd.DataFrame(d, columns=["id", "label"])
+    df.to_csv(args.predict_path, index=False)
+
 
 if __name__ == '__main__':
     argparser = argparse.ArgumentParser(sys.argv[0])
@@ -335,6 +349,9 @@ if __name__ == '__main__':
     args.filter_size = [1,2,3,4] # fitler size for cnn network
     args.predict_path = "./data/test_predict.csv"
     args.out_channels = 64 # Choose out_channel for cnn network
+
+    predict_from_model(model_path, args)
+
     
     classifier = Classifier(args)
 
