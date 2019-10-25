@@ -256,7 +256,7 @@ def build_data(args):
     return args
 
 def getLabel(label2idx, value):
-    for k, v in label2idx.iteritems():
+    for k, v in label2idx.items():
         if v == value:
             return k
 
@@ -279,7 +279,7 @@ def predict_from_model(model_path, args):
                 sent = "tốt"
             _, pred = classifier.predict(sent)
             # return
-            idx_pred = pred.squeeze().tolist()[0]
+            idx_pred = pred.squeeze().tolist()
             label = getLabel(args.vocab.l2i, idx_pred)        
             d['id'] = tag
             d['label'] = label
@@ -373,7 +373,7 @@ if __name__ == '__main__':
 
 
     
-    classifier = Classifier(args)
+    # classifier = Classifier(args)
 
-    classifier.train()
+    # classifier.train()
     predict_from_model(args.model_name, args)
