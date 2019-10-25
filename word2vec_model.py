@@ -11,6 +11,7 @@ import time
 import random
 import argparse
 import numpy as np
+import itertools
 
 import torch
 from sklearn import metrics
@@ -152,7 +153,7 @@ class Classifier(object):
     def train(self):            
         train_data = Txtfile(self.args.train_file, firstline=False, word2idx=self.word2idx, tag2idx=self.tag2idx)
         dev_data = Txtfile(self.args.dev_file, firstline=False, word2idx=self.word2idx, tag2idx=self.tag2idx)
-        test_data = Txtfile(self.args.test_file, firstline=False, word2idx=self.word2idx, tag2idx=self.tag2idx)
+        test_data = Txtfile(self.args.test_file, firstline=False, word2idx=self.word2idx)
 
         max_epochs = self.args.max_epochs
         saved_epoch = 0
@@ -164,7 +165,7 @@ class Classifier(object):
         for epoch in range(max_epochs):
             if self.args.decay_rate>0: 
                 self.lr_decay(epoch)
-            print("Epoch: %s/%s" %(epoch,max_epochs), len(train_data))
+            print("Epoch: %s/%s" %(epoch,max_epochs))
             train_loss = self.train_batch(train_data)
             # evaluate on developing data
             dev_metrics, dev_speed = self.evaluate_batch(dev_data)
@@ -186,13 +187,6 @@ class Classifier(object):
             else:
                 nepoch_no_imprv += 1
                 if nepoch_no_imprv >= self.args.patience:
-                    self.model.load_state_dict(torch.load(self.args.model_name))
-                    self.model.to(self.device)
-                    y_predict, label = self.test_predict(test_data)
-                    label = label - 2
-                    d = {"id": label.squeeze().tolist(),"label": y_predict.squeeze().tolist()}
-                    df = pd.DataFrame(d, columns=["id", "label"])
-                    df.to_csv(self.args.predict_path, index=False)
                     print("\nSUMMARY: - Completed %d epoches"%(max_epochs))
                     print("         - Dev acc: %.2f(%%); Dev P: %.2f(%%); Dev R: %.2f(%%);Dev F1: %.2f(%%)"%(100*best_metrics["acc"],
                           100*best_metrics["prf_macro"][0], 100*best_metrics["prf_macro"][1], 100*best_metrics["prf_macro"][2]))
@@ -204,14 +198,6 @@ class Classifier(object):
             epoch_finish = Timer.timeEst(epoch_start,(epoch+1)/max_epochs)
             print("\nINFO: - Trained time(Remained time for %d epochs: %s"%(max_epochs, epoch_finish))
         
-        self.model.load_state_dict(torch.load(self.args.model_name))
-        self.model.to(self.device)
-        y_predict, label = self.test_predict(test_data)
-        label = label - 2
-        
-        d = {"id": label.squeeze().tolist(),"label": y_predict.squeeze().tolist()}
-        df = pd.DataFrame(d, columns=["id", "label"])
-        df.to_csv(self.args.predict_path, index=False)
         print("\nSUMMARY: - Completed %d epoches"%(max_epochs))
         print("         - Dev acc: %.2f(%%); Dev P: %.2f(%%); Dev R: %.2f(%%);Dev F1: %.2f(%%)"%(100*best_metrics["acc"],
               100*best_metrics["prf_macro"][0], 100*best_metrics["prf_macro"][1], 100*best_metrics["prf_macro"][2]))
@@ -269,19 +255,54 @@ def build_data(args):
     SaveloadHP.save(args, args.model_args)
     return args
 
+def getLabel(label2idx, value):
+    for k, v in label2idx.iteritems():
+        if v == value:
+            return k
+
 def predict_from_model(model_path, args):
     classifier = Classifier(args)
     classifier.model.load_state_dict(torch.load(model_path))
-    # classifier.model = model_load
 
+    all_reviews = list()
+    fix = "test_"
+    pattern = "000000"
+    with open(args.test_file, newline='', encoding='utf-8') as f:
+        idx = 0
+        for line in itertools.islice(f, None):
+            d = {}
+            line = line.strip().split(",")
+            sent = line[0]
+            lenx = len(str(idx))
+            tag = fix + pattern[:-lenx] + str(idx)
+            if sent == "":
+                sent = "tốt"
+            _, pred = classifier.predict(sent)
+            # return
+            idx_pred = pred.squeeze().tolist()[0]
+            label = getLabel(args.vocab.l2i, idx_pred)        
+            d['id'] = tag
+            d['label'] = label
+            print(sent, label)
+            # return
+            all_reviews.append(d)
+            idx += 1
 
-    test_data = Txtfile(args.test_file, firstline=False, word2idx=classifier.word2idx, tag2idx=classifier.tag2idx)
-    y_pred, label = classifier.test_predict(test_data)
+        reviews_pd = pd.DataFrame.from_dict(all_reviews, orient='columns')
+        reviews_pd.to_csv("softmax_predict.csv", sep=',', encoding='utf-8',
+                header=True, columns=['id', 'label'], index=False)
 
-    label = label - 2
-    d = {"id": label.squeeze().tolist(),"label": y_pred.squeeze().tolist()}
-    df = pd.DataFrame(d, columns=["id", "label"])
-    df.to_csv(args.predict_path, index=False)
+    # vocab = Vocab(wl_th=None, cutoff=2)
+    # vocab.build([args.test_file], firstline=False)
+    # word2idx = vocab.wd2idx(vocab.w2i)
+    # tag2idx = vocab.tag2idx(vocab.l2i)
+    # test_data = Txtfile(args.test_file, firstline=False, word2idx=word2idx, tag2idx=tag2idx)
+    # y_pred, label = classifier.test_predict(test_data)
+
+    # # label = label - 2
+    # d = {"id": label.squeeze().tolist(),"label": y_pred.squeeze().tolist()}
+    # df = pd.DataFrame(d, columns=["id", "label"])
+    # df.to_csv(args.predict_path, index=False)
 
 
 if __name__ == '__main__':
@@ -350,9 +371,9 @@ if __name__ == '__main__':
     args.predict_path = "./data/test_predict.csv"
     args.out_channels = 64 # Choose out_channel for cnn network
 
-    predict_from_model(model_path, args)
 
     
     classifier = Classifier(args)
 
     classifier.train()
+    predict_from_model(args.model_name, args)

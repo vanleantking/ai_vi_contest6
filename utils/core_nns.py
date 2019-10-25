@@ -245,7 +245,7 @@ class BiRNN(nn.Module):
             label_prob, label_pred = label_prob.data.topk(k)
         else:
             label_prob = torch.sigmoid(label_score.squeeze())
-            label_pred = (label_prob < 0.5).data.long()
+            label_pred = (label_prob >= 0.5).data.long()
         return label_prob, label_pred
 
 

@@ -317,11 +317,12 @@ class Data2tensor:
 
 
 if __name__ == "__main__":
-    filename = "../data/test.csv"
+    filename = "../data/train.csv"
     vocab = Vocab(wl_th=None, cutoff=2)
     vocab.build([filename], firstline=False)
     word2idx = vocab.wd2idx(vocab.w2i)
     tag2idx = vocab.tag2idx(vocab.l2i)
+    print(tag2idx, vocab.l2i, tag2idx("0"))
     train_data = Txtfile(filename, firstline=False, word2idx=word2idx, tag2idx=tag2idx)
 
     train_iters = Vocab.minibatches(train_data, batch_size=4)

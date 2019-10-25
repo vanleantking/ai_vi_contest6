@@ -193,5 +193,8 @@ dict_abbs = abb_file()
 # load_file(dict_abbs, TRAIN_FILE, process_train)
 files = {"test": TEST_FILE}
 save_path = {"test": process_test}
-test_file(dict_abbs, files, save_path)
+load_file(dict_abbs, files, save_path)
+# files = {"test": TEST_FILE}
+# save_path = {"test": process_test}
+# test_file(dict_abbs, files, save_path)
 # print(abb_words)
