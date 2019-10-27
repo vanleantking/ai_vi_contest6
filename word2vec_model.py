@@ -278,31 +278,16 @@ def predict_from_model(model_path, args):
             if sent == "":
                 sent = "tốt"
             _, pred = classifier.predict(sent)
-            # return
             idx_pred = pred.squeeze().tolist()
             label = getLabel(args.vocab.l2i, idx_pred)        
             d['id'] = tag
             d['label'] = label
-            print(sent, label)
-            # return
             all_reviews.append(d)
             idx += 1
 
         reviews_pd = pd.DataFrame.from_dict(all_reviews, orient='columns')
         reviews_pd.to_csv("softmax_predict.csv", sep=',', encoding='utf-8',
                 header=True, columns=['id', 'label'], index=False)
-
-    # vocab = Vocab(wl_th=None, cutoff=2)
-    # vocab.build([args.test_file], firstline=False)
-    # word2idx = vocab.wd2idx(vocab.w2i)
-    # tag2idx = vocab.tag2idx(vocab.l2i)
-    # test_data = Txtfile(args.test_file, firstline=False, word2idx=word2idx, tag2idx=tag2idx)
-    # y_pred, label = classifier.test_predict(test_data)
-
-    # # label = label - 2
-    # d = {"id": label.squeeze().tolist(),"label": y_pred.squeeze().tolist()}
-    # df = pd.DataFrame(d, columns=["id", "label"])
-    # df.to_csv(args.predict_path, index=False)
 
 
 if __name__ == '__main__':
